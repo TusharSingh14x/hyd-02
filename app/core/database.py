@@ -20,12 +20,25 @@ class Base(DeclarativeBase):
     pass
 
 
-# ── PostgreSQL (SQLAlchemy async) ──
+def normalize_database_url(raw_url: str) -> str:
+    url = raw_url.strip()
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+    if "channel_binding=" in url:
+        from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+        parsed = urlparse(url)
+        filtered = [(k, v) for k, v in parse_qsl(parsed.query) if k != "channel_binding"]
+        url = urlunparse(parsed._replace(query=urlencode(filtered)))
+    return url
 
+
+db_url = normalize_database_url(settings.database_url)
 engine_options = {"pool_pre_ping": True}
-if not settings.database_url.startswith("sqlite"):
+if not db_url.startswith("sqlite"):
     engine_options.update(pool_size=10, connect_args={"timeout": 5})
-engine = create_async_engine(settings.database_url, echo=False, **engine_options)
+engine = create_async_engine(db_url, echo=False, **engine_options)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

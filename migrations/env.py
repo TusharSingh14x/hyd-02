@@ -18,11 +18,18 @@ elif context.is_offline_mode():
     with context.begin_transaction():
         context.run_migrations()
 else:
-    url = make_url(get_settings().database_url)
-    if url.drivername == "postgresql+asyncpg":
+    raw_url = get_settings().database_url.strip()
+    if raw_url.startswith("postgres://"):
+        raw_url = "postgresql://" + raw_url[len("postgres://"):]
+    url = make_url(raw_url)
+    if url.drivername in ("postgresql+asyncpg", "postgresql", "postgres"):
         url = url.set(drivername="postgresql+psycopg")
     elif url.drivername == "sqlite+aiosqlite":
         url = url.set(drivername="sqlite")
+    query = dict(url.query)
+    if "channel_binding" in query:
+        del query["channel_binding"]
+        url = url.set(query=query)
     config.set_main_option("sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"))
     engine = engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool)
     with engine.connect() as connection:
