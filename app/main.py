@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -30,11 +31,17 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure tables exist in PostgreSQL
-    await create_tables()
+    # Startup: ensure tables exist in PostgreSQL. Failures are logged but do not stop the app
+    try:
+        await create_tables()
+    except Exception as exc:
+        logging.exception("Startup: failed to create tables; continuing without DB: %s", exc)
     yield
     # Shutdown
-    await close_connections()
+    try:
+        await close_connections()
+    except Exception:
+        logging.exception("Error closing connections during shutdown")
 
 
 app = FastAPI(
